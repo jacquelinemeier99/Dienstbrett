@@ -1,0 +1,47 @@
+# Baut die App bei jeder Änderung und veröffentlicht sie über GitHub Pages.
+name: App veröffentlichen
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          # Öffentliche Werte: Adresse der Datenbank und der Schlüssel für die App (kein Geheimnis,
+          # geschützt wird über Anmeldung und Zugriffsregeln in der Datenbank).
+          VITE_SUPABASE_URL: https://ynnzaivjxhqieqmrefoq.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_Nb_GI-_Avjs6W1dUFtNS1g_-_jSaznJ
+          VITE_ORG_NAME: unser Team
+          VITE_PRIVACY_CONTACT: Jacqueline Meier
+          VITE_MIN_STAFF: 3
+          VITE_CARS: KDOW||;E-Fhzg||
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

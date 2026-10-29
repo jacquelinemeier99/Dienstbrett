@@ -5,3 +5,4 @@ dist
 supabase/.temp
 supabase/.branches
 deploy/app
+.env.production.local
