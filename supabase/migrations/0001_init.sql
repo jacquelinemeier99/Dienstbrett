@@ -194,6 +194,7 @@ create policy feed_own on public.feed_settings for all
 -- Anonyme Besucher bekommen gar nichts
 revoke all on all tables in schema public from anon;
 grant select, insert, update, delete on all tables in schema public to authenticated;
+grant all on all tables in schema public to service_role;          -- für das Kalender-Abo
 revoke execute on all functions in schema public from anon, public;
 grant execute on function public.claim_invite(), public.reset_feed_token(), public.remove_member(uuid),
   public.my_role(), public.is_member(), public.is_staff(), public.is_admin() to authenticated;
