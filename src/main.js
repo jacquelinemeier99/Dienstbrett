@@ -398,6 +398,7 @@ function ich() {
       <p class="note">Der Link gehört nur dir. Wer ihn hat, kann lesen, was du oben ausgewählt hast. Gib ihn nicht weiter. <button class="linkbtn" data-act="reset-feed">Neuen Link erzeugen</button> (der alte funktioniert dann nicht mehr).</p>
     </section>` : ''}
     ${isAdmin() ? adminSection() : ''}
+    ${isGuest() ? '' : importSection()}
     <section>
       <div class="stack">
         <button class="btn ghost block" data-act="privacy">Datenschutzhinweis</button>
@@ -428,9 +429,14 @@ function adminSection() {
       </form>
     </div>
   </section>
-  <section>
-    <p class="eyebrow">Team-Excel importieren · nur für Admins</p>
-    <label class="drop" for="upload"><strong>Excel-Datei auswählen (.xlsx)</strong><small>Die Datei wird nur auf diesem Gerät gelesen. Pro Blatt ein Monat, Zeilen = Tage, Spalten = Kürzel.</small></label>
+`;
+}
+function importSection() {
+  return `<section>
+    <p class="eyebrow">Dienstplan aus Excel übernehmen</p>
+    <label class="drop" for="upload"><strong>Excel-Datei auswählen (.xlsx)</strong><small>${isAdmin()
+      ? 'Als Admin übernimmst du die Spalten aller Personen.'
+      : `Übernommen wird nur deine eigene Spalte (${esc(store.me.ini)}).`} Die Datei wird nur auf diesem Gerät gelesen. Pro Blatt ein Monat, Zeilen = Tage, Spalten = Kürzel.</small></label>
     <input id="upload" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
     <div id="importres"></div>
   </section>`;
@@ -457,7 +463,9 @@ async function handleImport(file) {
     const [{ readXlsx }, { parseSheet }] = await Promise.all([import('./xlsx.js'), import('./importer.js')]);
     const sheets = await readXlsx(await file.arrayBuffer());
     const year = TODAY.getFullYear();
-    const results = sheets.map(s => ({ s, r: parseSheet(s, store.profiles, year, { fillRegular: true }) })).filter(x => x.r.month >= 0 || x.r.error);
+    // Teammitglieder übernehmen nur ihre eigene Spalte (die Datenbank erlaubt ohnehin nichts anderes)
+    const who = isAdmin() ? store.profiles : store.profiles.filter(p => p.id === store.me.id);
+    const results = sheets.map(s => ({ s, r: parseSheet(s, who, year, { fillRegular: true }) })).filter(x => x.r.month >= 0 || x.r.error);
     const ok = results.filter(x => !x.r.error);
     const unknown = {}; ok.forEach(x => Object.entries(x.r.unknown).forEach(([k, n]) => unknown[k] = (unknown[k] || 0) + n));
     const entries = ok.flatMap(x => x.r.entries);
@@ -465,14 +473,14 @@ async function handleImport(file) {
       <div class="field" style="margin-top:0"><label for="imp-year">Jahr</label><input id="imp-year" type="number" value="${year}" min="2020" max="2100"></div>
       ${ok.map(x => `<p style="margin:10px 0 0"><strong>${MON[x.r.month]}</strong>: ${x.r.entries.length} Einträge für ${x.r.columns.map(c => esc(c.person.ini)).join(', ')}</p>`).join('')}
       ${results.filter(x => x.r.error).map(x => `<p class="note">${esc(x.r.error)}</p>`).join('')}
-      ${[...new Set(ok.flatMap(x => x.r.unmatched))].length ? `<div class="warn">Diese Spalten gehören zu niemandem in der App und werden übersprungen: <b>${[...new Set(ok.flatMap(x => x.r.unmatched))].map(esc).join(', ')}</b>. Lade die Personen zuerst ein; sie müssen sich einmal angemeldet haben.</div>` : ''}
+      ${isAdmin() && [...new Set(ok.flatMap(x => x.r.unmatched))].length ? `<div class="warn">Diese Spalten gehören zu niemandem in der App und werden übersprungen: <b>${[...new Set(ok.flatMap(x => x.r.unmatched))].map(esc).join(', ')}</b>. Lade die Personen zuerst ein; sie müssen sich einmal angemeldet haben.</div>` : ''}
       ${Object.keys(unknown).length ? `<div class="warn">Diese Kürzel kennt die App nicht und lässt sie weg: <b>${Object.entries(unknown).map(([k, n]) => `${esc(k)} (${n}×)`).join(', ')}</b></div>` : ''}
       <label class="toggle"><span>Leere Werktage als T eintragen<small>In der Excel heißt ein leeres Feld: Regeldienst</small></span><input type="checkbox" class="sw" id="imp-fill" checked></label>
       <div class="stack"><button class="btn block" id="imp-go" ${entries.length ? '' : 'disabled'}>Übernehmen</button></div>
       <p class="note">Bestehende Einträge an diesen Tagen werden überschrieben.</p></div>`;
     document.getElementById('imp-go').onclick = safely(async () => {
       const y = Number(document.getElementById('imp-year').value), fill = document.getElementById('imp-fill').checked;
-      const rows = sheets.flatMap(s => { const r = parseSheet(s, store.profiles, y, { fillRegular: fill }); return r.error ? [] : r.entries; });
+      const rows = sheets.flatMap(s => { const r = parseSheet(s, who, y, { fillRegular: fill }); return r.error ? [] : r.entries; });
       await api.upsertShifts(rows);
       out.innerHTML = ''; toast(`${rows.length} Dienste übernommen`);
     });

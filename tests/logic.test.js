@@ -47,3 +47,9 @@ test('Kalenderdatei: 24-h-Dienst 08:00 bis 08:00, Tagdienst ganztägig', () => {
   assert.match(ics, /SUMMARY:Privat/);
   assert.ok(ics.split('\r\n').every(l => new TextEncoder().encode(l).length <= 75));
 });
+
+test('Teammitglied: nur die eigene Spalte wird übernommen', () => {
+  const sheet = { name: 'Oktober', rows: [['', '', 'HG', 'JM'], ['1', 'Do', 'R', 'U'], ['2', 'Fr', 'C3', '']] };
+  const r = parseSheet(sheet, [{ id: 'j', ini: 'JM' }], 2026, { fillRegular: false });
+  assert.deepEqual(r.entries, [{ user_id: 'j', day: '2026-10-01', code: 'U' }]);
+});
