@@ -6,3 +6,10 @@ supabase/.temp
 supabase/.branches
 deploy/app
 .env.production.local
+
+# Echte Dienstpläne nie ins (öffentliche) Projekt
+deploy/daten-*.sql
+deploy/schritt-*.sql
+scripts/plan-*.py
+*.xlsx
+!tests/*.xlsx

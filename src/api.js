@@ -116,6 +116,24 @@ export async function upsertShifts(rows) {
   }
   onChange();
 }
+export async function upsertPending(rows) {        // Dienste für Kürzel vormerken (nur Admins)
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await sb.from('pending_shifts').upsert(rows.slice(i, i + 500)); fail(error);
+  }
+}
+export async function paintShifts(uid, changes) {   // changes: Map(day -> code | '')
+  const set = [...changes].filter(([, c]) => c).map(([day, code]) => ({ user_id: uid, day, code, updated_at: new Date().toISOString() }));
+  const del = [...changes].filter(([, c]) => !c).map(([day]) => day);
+  const prev = new Map([...changes.keys()].map(d => [d, shiftOf(uid, d)]));
+  changes.forEach((c, d) => c ? store.shifts.set(sk(uid, d), c) : store.shifts.delete(sk(uid, d)));
+  onChange();
+  try {
+    if (set.length) { const { error } = await sb.from('shifts').upsert(set); fail(error); }
+    if (del.length) { const { error } = await sb.from('shifts').delete().eq('user_id', uid).in('day', del); fail(error); }
+  } catch (e) {
+    prev.forEach((c, d) => c ? store.shifts.set(sk(uid, d), c) : store.shifts.delete(sk(uid, d))); onChange(); throw e;
+  }
+}
 export async function addEvent(day, at, title) {
   const { data, error } = await sb.from('events').insert({ day, at: at || null, title, created_by: store.me.id }).select().single();
   fail(error); store.events.set(data.id, data); onChange();

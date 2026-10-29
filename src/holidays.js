@@ -1,4 +1,4 @@
-// Bundesweite Feiertage. Landesspezifische Feiertage lassen sich unten ergänzen.
+// Feiertage: bundesweit plus Nordrhein-Westfalen (Fronleichnam, Allerheiligen).
 const pad = (n) => String(n).padStart(2, '0');
 const k = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
@@ -24,7 +24,8 @@ function forYear(y) {
     [`${y}-10-03`]: 'Tag der Dt. Einheit',
     [`${y}-12-25`]: '1. Weihnachtstag',
     [`${y}-12-26`]: '2. Weihnachtstag',
-    // Landesfeiertage hier ergänzen, z. B.: [`${y}-11-01`]: 'Allerheiligen',
+    [off(60)]: 'Fronleichnam',                     // NRW
+    [`${y}-11-01`]: 'Allerheiligen',              // NRW
   });
 }
 export const holidayName = (day) => forYear(Number(day.slice(0, 4)))[day] || '';

@@ -237,3 +237,7 @@ a.btn{text-decoration:none;text-align:center}
 .wk{scroll-margin-top:110px}
 .ev .t{overflow-wrap:anywhere}
 .ev button{flex:none}
+.palette{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;margin-top:10px}
+.palette .chip{padding:6px 11px;font-size:13px}
+.grid.painting{touch-action:none;user-select:none;-webkit-user-select:none}
+.grid.painting .day{cursor:crosshair}

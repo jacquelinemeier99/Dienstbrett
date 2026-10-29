@@ -76,6 +76,7 @@ const inOfficeN = s => s.buero.length + s.h24.length;   // C1, C2 (andere Wache)
 /* ---------- UI-Zustand ---------- */
 let view = 'heute', selDay = todayKey(), month = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1), carDay = todayKey();
 let showRegular = false, teamMode = 'woche';
+let paintOn = false, paintCode = 'T';                  // Malmodus in „Mein Plan“
 const $app = document.getElementById('app'), $tabs = document.getElementById('tabs'), $layer = document.getElementById('layer');
 
 function toast(msg) {
@@ -257,8 +258,15 @@ function plan() {
     <section>
       <div class="mhead"><p class="eyebrow" style="margin:0">${(counts['T'] || 0) + (counts['T½'] || 0) + (counts['P-Spr'] || 0)} Tagdienste · ${h24n} × 24 h · ${counts['U'] || 0} Urlaub</p>
         <div class="navbtns"><button class="iconbtn" data-month="-1" aria-label="Vorheriger Monat">‹</button><button class="iconbtn" data-month="1" aria-label="Nächster Monat">›</button></div></div>
-      <div class="grid">${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(x => `<div class="dow">${x}</div>`).join('')}${cells.join('')}</div>
-      <p class="note">Tippe auf einen Tag, um den Dienst zu ändern oder einen Termin einzutragen. Ein Punkt bedeutet: Termin vorhanden.</p>
+      <div class="seg" style="margin-top:12px"><button data-pmode="off" aria-pressed="${!paintOn}">Tag bearbeiten</button><button data-pmode="on" aria-pressed="${paintOn}">Malmodus</button></div>
+      ${paintOn ? `<div class="palette">
+        <div class="chips">${[...QUICK, ...H24, ...OFF].map(c => `<button class="chip" data-paint="${esc(c)}" style="--c:${col(c)}" aria-pressed="${paintCode === c}"><span class="dot"></span>${esc(c)}</button>`).join('')}
+          <button class="chip" data-paint="" style="--c:var(--danger)" aria-pressed="${paintCode === ''}">Leeren</button></div>
+        <div class="chips" style="margin-top:8px"><button class="btn small ghost" data-act="fill-t">Alle leeren Werktage: T</button></div>
+        <p class="note" style="margin:8px 0 0">${paintCode ? `<b>${esc(paintCode)}</b> gewählt` : '<b>Leeren</b> gewählt'}: Tippe Tage an oder streiche mit dem Finger darüber.</p>
+      </div>` : ''}
+      <div class="grid ${paintOn ? 'painting' : ''}" id="plangrid">${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(x => `<div class="dow">${x}</div>`).join('')}${cells.join('')}</div>
+      <p class="note">${paintOn ? 'Änderungen werden sofort gespeichert und sind für alle sichtbar.' : 'Tippe auf einen Tag, um den Dienst zu ändern oder einen Termin einzutragen. Ein Punkt bedeutet: Termin vorhanden.'}</p>
     </section>
     <section>
       <button class="btn block" data-act="ics-month">Dienste im ${MON[m]} für Outlook herunterladen</button>
@@ -464,16 +472,20 @@ async function handleImport(file) {
     const sheets = await readXlsx(await file.arrayBuffer());
     const year = TODAY.getFullYear();
     // Teammitglieder übernehmen nur ihre eigene Spalte (die Datenbank erlaubt ohnehin nichts anderes)
-    const who = isAdmin() ? store.profiles : store.profiles.filter(p => p.id === store.me.id);
+    const pendingInv = store.invites.filter(i => !i.claimed_at && !store.profiles.some(p => p.ini.toUpperCase() === i.ini.toUpperCase()));
+    const who = isAdmin()
+      ? [...store.profiles, ...pendingInv.map(i => ({ id: 'pending:' + i.ini, ini: i.ini }))]
+      : store.profiles.filter(p => p.id === store.me.id);
     const results = sheets.map(s => ({ s, r: parseSheet(s, who, year, { fillRegular: true }) })).filter(x => x.r.month >= 0 || x.r.error);
     const ok = results.filter(x => !x.r.error);
     const unknown = {}; ok.forEach(x => Object.entries(x.r.unknown).forEach(([k, n]) => unknown[k] = (unknown[k] || 0) + n));
     const entries = ok.flatMap(x => x.r.entries);
     out.innerHTML = `<div class="card" style="margin-top:12px">
       <div class="field" style="margin-top:0"><label for="imp-year">Jahr</label><input id="imp-year" type="number" value="${year}" min="2020" max="2100"></div>
-      ${ok.map(x => `<p style="margin:10px 0 0"><strong>${MON[x.r.month]}</strong>: ${x.r.entries.length} Einträge für ${x.r.columns.map(c => esc(c.person.ini)).join(', ')}</p>`).join('')}
+      ${ok.map(x => `<p style="margin:10px 0 0"><strong>${MON[x.r.month]}</strong>: ${x.r.entries.length} Einträge für ${x.r.columns.map(c => esc(c.person.ini) + (String(c.person.id).startsWith('pending:') ? ' (vorgemerkt)' : '')).join(', ')}</p>`).join('')}
+      ${isAdmin() && ok.some(x => x.r.columns.some(c => String(c.person.id).startsWith('pending:'))) ? '<p class="note">„Vorgemerkt“: Diese Personen sind eingeladen, aber noch nicht angemeldet. Sie bekommen ihre Dienste automatisch beim ersten Login.</p>' : ''}
       ${results.filter(x => x.r.error).map(x => `<p class="note">${esc(x.r.error)}</p>`).join('')}
-      ${isAdmin() && [...new Set(ok.flatMap(x => x.r.unmatched))].length ? `<div class="warn">Diese Spalten gehören zu niemandem in der App und werden übersprungen: <b>${[...new Set(ok.flatMap(x => x.r.unmatched))].map(esc).join(', ')}</b>. Lade die Personen zuerst ein; sie müssen sich einmal angemeldet haben.</div>` : ''}
+      ${isAdmin() && [...new Set(ok.flatMap(x => x.r.unmatched))].length ? `<div class="warn">Diese Spalten gehören zu niemandem in der App und werden übersprungen: <b>${[...new Set(ok.flatMap(x => x.r.unmatched))].map(esc).join(', ')}</b>. Lade die Personen zuerst mit genau diesem Kürzel ein.</div>` : ''}
       ${Object.keys(unknown).length ? `<div class="warn">Diese Kürzel kennt die App nicht und lässt sie weg: <b>${Object.entries(unknown).map(([k, n]) => `${esc(k)} (${n}×)`).join(', ')}</b></div>` : ''}
       <label class="toggle"><span>Leere Werktage als T eintragen<small>In der Excel heißt ein leeres Feld: Regeldienst</small></span><input type="checkbox" class="sw" id="imp-fill" checked></label>
       <div class="stack"><button class="btn block" id="imp-go" ${entries.length ? '' : 'disabled'}>Übernehmen</button></div>
@@ -481,7 +493,9 @@ async function handleImport(file) {
     document.getElementById('imp-go').onclick = safely(async () => {
       const y = Number(document.getElementById('imp-year').value), fill = document.getElementById('imp-fill').checked;
       const rows = sheets.flatMap(s => { const r = parseSheet(s, who, y, { fillRegular: fill }); return r.error ? [] : r.entries; });
-      await api.upsertShifts(rows);
+      const pend = rows.filter(r => String(r.user_id).startsWith('pending:'));
+      await api.upsertShifts(rows.filter(r => !String(r.user_id).startsWith('pending:')));
+      if (pend.length) await api.upsertPending(pend.map(r => ({ ini: r.user_id.slice(8), day: r.day, code: r.code })));
       out.innerHTML = ''; toast(`${rows.length} Dienste übernommen`);
     });
   } catch (e) { console.error(e); out.innerHTML = `<div class="warn">${esc(e.message || 'Die Datei konnte nicht gelesen werden.')} Bitte als .xlsx speichern und erneut versuchen.</div>`; }
@@ -523,7 +537,33 @@ function render() {
 }
 function go(v) { view = v; render(); window.scrollTo(0, 0); }
 
+function bindPaint() {
+  const grid = document.getElementById('plangrid');
+  if (!grid || !paintOn) return;
+  let stroke = null;
+  const apply = cell => {
+    const k = cell.dataset.edit; if (!k || stroke.has(k)) return;
+    stroke.set(k, paintCode);
+    cell.children[1].outerHTML = paintCode ? `<span class="c" style="--c:${col(paintCode)}">${esc(paintCode)}</span>` : '<span></span>';
+  };
+  grid.onpointerdown = e => {
+    const cell = e.target.closest('[data-edit]'); if (!cell) return;
+    e.preventDefault(); stroke = new Map(); grid.setPointerCapture(e.pointerId); apply(cell);
+  };
+  grid.onpointermove = e => {
+    if (!stroke) return;
+    const cell = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-edit]');
+    if (cell && grid.contains(cell)) apply(cell);
+  };
+  const end = () => {
+    if (!stroke) return;
+    const changes = new Map([...stroke].filter(([d, c]) => shiftOf(store.me.id, d) !== c)); stroke = null;
+    if (changes.size) safely(() => api.paintShifts(store.me.id, changes))();
+  };
+  grid.onpointerup = end; grid.onpointercancel = end;
+}
 function bindView() {
+  bindPaint();
   const sr = document.getElementById('showreg'); if (sr) sr.onchange = () => { showRegular = sr.checked; render(); };
   const ft = document.getElementById('f-t'); if (ft) ft.onchange = safely(() => api.updateFeed({ include_team: ft.checked }));
   const fa = document.getElementById('f-a'); if (fa) fa.onchange = safely(() => api.updateFeed({ include_appts: fa.checked }));
@@ -549,7 +589,9 @@ document.addEventListener('click', async e => {
   if (ds.carday) { carDay = ds.carday; return render(); }
   if (ds.tmode) { teamMode = ds.tmode; return render(); }
   if (ds.month) { month = new Date(month.getFullYear(), month.getMonth() + Number(ds.month), 1); return render(); }
-  if (ds.edit) return editSheet(ds.edit);
+  if (ds.edit) return paintOn ? undefined : editSheet(ds.edit);
+  if (ds.pmode) { paintOn = ds.pmode === 'on'; return render(); }
+  if (ds.paint !== undefined) { paintCode = ds.paint; return render(); }
   if (ds.jump) { selDay = ds.jump; return go('heute'); }
   if (ds.set !== undefined) return safely(async () => {
     const cur = shiftOf(store.me.id, selDay);
@@ -562,6 +604,12 @@ document.addEventListener('click', async e => {
   })();
   const one = id => store.events.get(id) || store.appts.get(id);
   switch (ds.act) {
+    case 'fill-t': {
+      const y = month.getFullYear(), m = month.getMonth(), n = new Date(y, m + 1, 0).getDate(), changes = new Map();
+      for (let i = 1; i <= n; i++) { const d = new Date(y, m, i), k = key(d); if (!isWE(d) && !holidayName(k) && !shiftOf(store.me.id, k)) changes.set(k, 'T'); }
+      if (!changes.size) return toast('Alle Werktage sind schon belegt.');
+      return safely(async () => { await api.paintShifts(store.me.id, changes); toast(`${changes.size} Werktage als T eingetragen`); })();
+    }
     case 'book': return bookSheet();
     case 'add-ev': return evSheet();
     case 'close-sheet': return closeSheet();
