@@ -600,7 +600,7 @@ function loginView(msg = '') {
     e.preventDefault();
     const email = document.getElementById('l-mail').value.trim().toLowerCase();
     const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Wird gesendet …';
-    const { error } = await api.sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+    const { error } = await api.sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
     if (error) return loginView(/rate|seconds/i.test(error.message) ? 'Bitte warte kurz, bevor du einen neuen Code anforderst.' : 'Der Code konnte nicht gesendet werden. Prüfe die Adresse.');
     codeView(email);
   };
@@ -608,7 +608,7 @@ function loginView(msg = '') {
 function codeView(email, msg = '') {
   $app.innerHTML = `
   <div class="login wrap">
-    <div class="brand"><div class="logo" aria-hidden="true">D</div><h1>Code eingeben</h1><p>Wir haben einen Code an <b>${esc(email)}</b> geschickt. Schau auch im Spam-Ordner nach.</p></div>
+    <div class="brand"><div class="logo" aria-hidden="true">D</div><h1>E-Mail prüfen</h1><p>Wir haben dir eine E-Mail an <b>${esc(email)}</b> geschickt. Gib den Code daraus hier ein oder tippe in der E-Mail auf den Anmelde-Link. Schau auch im Spam-Ordner nach.</p></div>
     <form id="codeform" class="card">
       <div class="field" style="margin-top:0"><label for="l-code">Code aus der E-Mail</label><input id="l-code" inputmode="numeric" autocomplete="one-time-code" required pattern="[0-9]{6,8}" maxlength="8" class="codeinput"></div>
       <div class="stack"><button class="btn block" type="submit">Anmelden</button><button type="button" class="btn ghost block" id="back">Andere Adresse</button></div>
@@ -621,7 +621,7 @@ function codeView(email, msg = '') {
     const token = document.getElementById('l-code').value.trim();
     const { error } = await api.sb.auth.verifyOtp({ email, token, type: 'email' });
     if (error) return codeView(email, 'Der Code stimmt nicht oder ist abgelaufen.');
-    start();
+    once();
   };
 }
 function noAccessView() {
@@ -648,11 +648,16 @@ async function start() {
 // Mitternacht: "Heute" weiterschalten
 setInterval(() => { const t = new Date(); t.setHours(0, 0, 0, 0); if (t.getTime() !== TODAY.getTime()) { TODAY = t; if (store.me) render(); } }, 60000);
 
+let started = false;
+function once() { if (!started) { started = true; history.replaceState(null, '', location.pathname); start(); } }
+
 if (!api.configured) {
   $tabs.parentElement.hidden = true;
   $app.innerHTML = '<div class="login wrap"><div class="brand"><h1>Noch nicht eingerichtet</h1><p>Es fehlen die Zugangsdaten zur Datenbank (VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY). Siehe Anleitung in der README.</p></div></div>';
 } else {
-  api.sb.auth.getSession().then(({ data }) => data.session ? start() : loginView());
+  // Anmeldung per Code oder per Link aus der E-Mail (der Link landet mit der Sitzung in der Adresse)
+  api.sb.auth.onAuthStateChange((ev, session) => { if (ev === 'SIGNED_IN' && session && !document.getElementById('codeform')) setTimeout(once, 0); });
+  api.sb.auth.getSession().then(({ data }) => data.session ? once() : loginView());
 }
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
