@@ -77,6 +77,8 @@ const inOfficeN = s => s.buero.length + s.h24.length;   // C1, C2 (andere Wache)
 let view = 'heute', selDay = todayKey(), month = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1), carDay = todayKey();
 let showRegular = false, teamMode = 'woche';
 let paintOn = false, paintCode = 'T';                  // Malmodus in „Mein Plan“
+let planUser = null;                                   // Admins: Plan einer anderen Person bearbeiten
+const planUid = () => (isAdmin() && planUser && store.profiles.some(p => p.id === planUser)) ? planUser : store.me.id;
 const $app = document.getElementById('app'), $tabs = document.getElementById('tabs'), $layer = document.getElementById('layer');
 
 function toast(msg) {
@@ -207,32 +209,39 @@ function weeks(y, m) {
   return out.join('');
 }
 function monthTable(y, m) {
+  // Wie die Team-Excel: Tage untereinander, Personen nebeneinander – der ganze Monat auf einen Blick
   const ps = people(), days = new Date(y, m + 1, 0).getDate();
   const ds = [...Array(days)].map((_, i) => new Date(y, m, i + 1));
-  const cls = d => `${isWE(d) || holidayName(key(d)) ? 'we' : ''} ${d.getTime() === TODAY.getTime() ? 'td' : ''}`;
-  return `<div class="mx-wrap" id="mxwrap"><table class="mx">
-    <thead>
-      <tr><th class="nm"></th>${ds.map(d => `<th class="${cls(d)}" ${d.getTime() === TODAY.getTime() ? 'id="mxtoday"' : ''}><button data-jump="${key(d)}" aria-label="${nice(d)} öffnen"><span>${DOW[d.getDay()]}</span><b>${d.getDate()}</b>${eventsOn(key(d)).length ? `<i title="${esc(eventsOn(key(d)).map(e => e.title).join(', '))}"></i>` : ''}</button></th>`).join('')}</tr>
-      <tr class="sum"><th class="nm">Im Büro</th>${ds.map(d => { const n = inOfficeN(dayStats(key(d))); return `<td class="${cls(d)}" style="color:${n < MIN_STAFF && !isWE(d) ? 'var(--danger)' : 'var(--g-buero)'}">${n}</td>`; }).join('')}</tr>
-    </thead>
-    <tbody>${ps.map(p => `<tr class="${isMe(p) ? 'me' : ''}"><th class="nm">${esc(first(p.name))}${isMe(p) ? ' (ich)' : ''}<small>${p.role === 'guest' ? 'Praktikum' : esc(p.name.split(' ').slice(1).join(' '))}</small></th>${ds.map(d => {
-      const k = key(d), c = shiftOf(p.id, k), vis = c && (showRegular || !REGULAR.includes(c));
-      return `<td class="cell ${cls(d)}" ${isMe(p) ? `data-editcell="${k}"` : ''}>${vis ? `<span class="mc" style="--c:${col(c)}" title="${esc(info(c).label)}">${esc(c)}</span>` : ''}</td>`;
-    }).join('')}</tr>`).join('')}
-    </tbody></table></div>`;
+  return `<div class="mo" style="--n:${ps.length}">
+    <div class="mo-row mo-hd"><span></span>${ps.map(p => `<span class="ini ${isMe(p) ? 'me' : ''} ${p.role === 'guest' ? 'guest' : ''}" title="${esc(p.name)}">${esc(p.ini)}</span>`).join('')}<span class="ini">Büro</span></div>
+    ${ds.map(d => {
+      const k = key(d), hol = holidayName(k), off = isWE(d) || hol, n = inOfficeN(dayStats(k)), ev = eventsOn(k);
+      return `<div class="mo-row ${off ? 'we' : ''} ${hol ? 'hol' : ''} ${d.getTime() === TODAY.getTime() ? 'td' : ''}">
+        <button class="mo-d" data-jump="${k}" aria-label="${nice(d)} öffnen" title="${esc([hol, ...ev.map(e => e.title)].filter(Boolean).join(' · '))}"><b>${d.getDate()}</b><span>${DOW[d.getDay()]}</span>${ev.length ? '<i></i>' : ''}</button>
+        ${ps.map(p => {
+          const c = shiftOf(p.id, k), vis = c && (showRegular || !REGULAR.includes(c)), me = isMe(p);
+          return `<span class="mo-c ${vis ? '' : 'empty'}" ${vis ? `style="--c:${col(c)}"` : ''} ${me ? `data-editcell="${k}"` : ''} title="${esc(p.name)}${c ? ': ' + esc(info(c).label) : ''}">${vis ? esc(c) : ''}</span>`;
+        }).join('')}
+        <span class="mo-n" style="color:${off ? 'var(--muted)' : n < MIN_STAFF ? 'var(--danger)' : 'var(--ink)'}">${n}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 function team() {
   const y = month.getFullYear(), m = month.getMonth();
-  return hero('Wer ist wann wo', `${MON[m]} ${y}`) + `
+  const nav = `<div class="navbtns"><button class="iconbtn" data-month="-1" aria-label="Vorheriger Monat">‹</button><button class="iconbtn" data-month="1" aria-label="Nächster Monat">›</button></div>`;
+  const compact = teamMode === 'monat';                 // Monat: kleiner Kopf, damit der ganze Monat auf den Bildschirm passt
+  return (compact
+    ? `<header class="hero hero-sm wrap"><div class="hero-top"><h1>${MON[m]} ${y}</h1>${nav}</div></header>`
+    : hero('Wer ist wann wo', `${MON[m]} ${y}`)) + `
   <div class="wrap">
-    <section>
-    <div class="mhead"><p class="eyebrow" style="margin:0">Zahl = im Büro (ohne C1, C2, BV)</p>
-      <div class="navbtns"><button class="iconbtn" data-month="-1" aria-label="Vorheriger Monat">‹</button><button class="iconbtn" data-month="1" aria-label="Nächster Monat">›</button></div></div>
-    <label class="toggle" style="border:0;padding-bottom:0"><span>Regeldienst einblenden<small>T und T½ sind normal und stehen deshalb nicht im Teamkalender</small></span><input type="checkbox" class="sw" id="showreg" ${showRegular ? 'checked' : ''}></label>
-    <div class="seg" style="margin-top:12px"><button data-tmode="woche" aria-pressed="${teamMode === 'woche'}">Wochen</button><button data-tmode="monat" aria-pressed="${teamMode === 'monat'}">Monat</button></div>
+    <section style="${compact ? 'padding-top:8px' : ''}">
+    ${compact ? '' : `<div class="mhead"><p class="eyebrow" style="margin:0">Zahl = im Büro (ohne C1, C2, BV)</p>${nav}</div>`}
+    <div class="tbar"><div class="seg"><button data-tmode="woche" aria-pressed="${teamMode === 'woche'}">Wochen</button><button data-tmode="monat" aria-pressed="${teamMode === 'monat'}">Monat</button></div>
+      <button class="chip regchip" data-act="toggle-reg" aria-pressed="${showRegular}" title="T und T½ sind normal und deshalb ausgeblendet">T zeigen</button></div>
     ${teamMode === 'woche'
       ? weeks(y, m) + '<p class="note">Leeres Feld an einem Werktag = Regeldienst. Tippe auf ein Datum für die Tagesansicht oder auf deine eigene Spalte, um deinen Dienst zu ändern.</p>'
-      : monthTable(y, m) + '<p class="note">Wische seitlich durch den Monat. Tippe auf ein Datum für die Tagesansicht oder auf deine eigene Zeile, um deinen Dienst zu ändern.</p>'}
+      : monthTable(y, m) + '<p class="note">Büro = Anzahl im Büro (ohne C1, C2, BV). Leeres Feld an einem Werktag = Regeldienst. Gelber Punkt = Teamtermin. Tippe auf ein Datum für die Tagesansicht oder auf deine eigene Spalte, um deinen Dienst zu ändern.</p>'}
     </section>
     <section><p class="eyebrow">Dienstarten · # gilt als Frei, LD als LDF</p>
       <div class="codelegend">${Object.entries(CODES).map(([c, v]) => `<span><b style="--c:${col(c)}">${esc(c)}</b>${esc(v.label.replace('24-h-Dienst ', '24 h ').replace(' (Veranstaltung)', ''))}</span>`).join('')}</div></section>
@@ -241,24 +250,26 @@ function team() {
 
 /* ---------- Mein Plan ---------- */
 function plan() {
-  const y = month.getFullYear(), m = month.getMonth();
+  const y = month.getFullYear(), m = month.getMonth(), uid = planUid(), other = uid !== store.me.id;
+  if (other) paintOn = true;
   const firstD = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), lead = (firstD.getDay() + 6) % 7;
   const cells = [], counts = {};
   for (let i = 0; i < lead; i++) cells.push('<div></div>');
   for (let i = 1; i <= days; i++) {
-    const d = new Date(y, m, i), k = key(d), c = shiftOf(store.me.id, k);
+    const d = new Date(y, m, i), k = key(d), c = shiftOf(uid, k);
     if (c) counts[c] = (counts[c] || 0) + 1;
-    const ap = apptsOn(k).length || eventsOn(k).length;
+    const ap = (!other && apptsOn(k).length) || eventsOn(k).length;
     cells.push(`<button class="day ${isWE(d) || holidayName(k) ? 'we' : ''} ${d.getTime() === TODAY.getTime() ? 'today' : ''}" data-edit="${k}" aria-label="${nice(d)}: ${c ? esc(info(c).label) : 'nichts eingetragen'}">
       <span class="n">${i}</span>${c ? `<span class="c" style="--c:${col(c)}">${esc(c)}</span>` : '<span></span>'}<span class="ap ${ap ? '' : 'none'}"></span></button>`);
   }
   const h24n = Object.entries(counts).filter(([c]) => is24(c)).reduce((s, [, n]) => s + n, 0);
-  return hero('Mein Dienstplan', `${MON[m]} ${y}`) + `
+  return hero(other ? `Plan von ${esc(store.profiles.find(p => p.id === uid).name)}` : 'Mein Dienstplan', `${MON[m]} ${y}`) + `
   <div class="wrap">
     <section>
       <div class="mhead"><p class="eyebrow" style="margin:0">${(counts['T'] || 0) + (counts['T½'] || 0) + (counts['P-Spr'] || 0)} Tagdienste · ${h24n} × 24 h · ${counts['U'] || 0} Urlaub</p>
         <div class="navbtns"><button class="iconbtn" data-month="-1" aria-label="Vorheriger Monat">‹</button><button class="iconbtn" data-month="1" aria-label="Nächster Monat">›</button></div></div>
-      <div class="seg" style="margin-top:12px"><button data-pmode="off" aria-pressed="${!paintOn}">Tag bearbeiten</button><button data-pmode="on" aria-pressed="${paintOn}">Malmodus</button></div>
+      ${isAdmin() ? `<div class="field"><label for="planuser">Plan von</label><select id="planuser">${people().filter(p => p.role !== 'guest' || p.id === uid).map(p => `<option value="${p.id}" ${p.id === uid ? 'selected' : ''}>${esc(p.name)}${isMe(p) ? ' (ich)' : ''}</option>`).join('')}</select></div>` : ''}
+      ${other ? '' : `<div class="seg" style="margin-top:12px"><button data-pmode="off" aria-pressed="${!paintOn}">Tag bearbeiten</button><button data-pmode="on" aria-pressed="${paintOn}">Malmodus</button></div>`}
       ${paintOn ? `<div class="palette">
         <div class="chips">${[...QUICK, ...H24, ...OFF].map(c => `<button class="chip" data-paint="${esc(c)}" style="--c:${col(c)}" aria-pressed="${paintCode === c}"><span class="dot"></span>${esc(c)}</button>`).join('')}
           <button class="chip" data-paint="" style="--c:var(--danger)" aria-pressed="${paintCode === ''}">Leeren</button></div>
@@ -268,10 +279,10 @@ function plan() {
       <div class="grid ${paintOn ? 'painting' : ''}" id="plangrid">${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(x => `<div class="dow">${x}</div>`).join('')}${cells.join('')}</div>
       <p class="note">${paintOn ? 'Änderungen werden sofort gespeichert und sind für alle sichtbar.' : 'Tippe auf einen Tag, um den Dienst zu ändern oder einen Termin einzutragen. Ein Punkt bedeutet: Termin vorhanden.'}</p>
     </section>
-    <section>
+    ${other ? '' : `<section>
       <button class="btn block" data-act="ics-month">Dienste im ${MON[m]} für Outlook herunterladen</button>
       <p class="note">Ohne T und T½: Im Outlook-Kalender bist du an normalen Tagen frei für Termine. Die Datei in Outlook öffnen oder unter outlook.office.com → Kalender hinzufügen → „Aus Datei hochladen“.</p>
-    </section>
+    </section>`}
   </div>`;
 }
 function editSheet(k) {
@@ -557,13 +568,15 @@ function bindPaint() {
   };
   const end = () => {
     if (!stroke) return;
-    const changes = new Map([...stroke].filter(([d, c]) => shiftOf(store.me.id, d) !== c)); stroke = null;
-    if (changes.size) safely(() => api.paintShifts(store.me.id, changes))();
+    const changes = new Map([...stroke].filter(([d, c]) => shiftOf(planUid(), d) !== c)); stroke = null;
+    if (changes.size) safely(() => api.paintShifts(planUid(), changes))();
   };
   grid.onpointerup = end; grid.onpointercancel = end;
 }
 function bindView() {
   bindPaint();
+  const pu = document.getElementById('planuser');
+  if (pu) pu.onchange = () => { planUser = pu.value; paintOn = pu.value !== store.me.id || paintOn; render(); };
   const sr = document.getElementById('showreg'); if (sr) sr.onchange = () => { showRegular = sr.checked; render(); };
   const ft = document.getElementById('f-t'); if (ft) ft.onchange = safely(() => api.updateFeed({ include_team: ft.checked }));
   const fa = document.getElementById('f-a'); if (fa) fa.onchange = safely(() => api.updateFeed({ include_appts: fa.checked }));
@@ -606,10 +619,11 @@ document.addEventListener('click', async e => {
   switch (ds.act) {
     case 'fill-t': {
       const y = month.getFullYear(), m = month.getMonth(), n = new Date(y, m + 1, 0).getDate(), changes = new Map();
-      for (let i = 1; i <= n; i++) { const d = new Date(y, m, i), k = key(d); if (!isWE(d) && !holidayName(k) && !shiftOf(store.me.id, k)) changes.set(k, 'T'); }
+      for (let i = 1; i <= n; i++) { const d = new Date(y, m, i), k = key(d); if (!isWE(d) && !holidayName(k) && !shiftOf(planUid(), k)) changes.set(k, 'T'); }
       if (!changes.size) return toast('Alle Werktage sind schon belegt.');
-      return safely(async () => { await api.paintShifts(store.me.id, changes); toast(`${changes.size} Werktage als T eingetragen`); })();
+      return safely(async () => { await api.paintShifts(planUid(), changes); toast(`${changes.size} Werktage als T eingetragen`); })();
     }
+    case 'toggle-reg': showRegular = !showRegular; return render();
     case 'book': return bookSheet();
     case 'add-ev': return evSheet();
     case 'close-sheet': return closeSheet();

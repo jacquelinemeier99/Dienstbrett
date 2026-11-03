@@ -241,3 +241,32 @@ a.btn{text-decoration:none;text-align:center}
 .palette .chip{padding:6px 11px;font-size:13px}
 .grid.painting{touch-action:none;user-select:none;-webkit-user-select:none}
 .grid.painting .day{cursor:crosshair}
+
+/* Team: kompakte Bedienleiste */
+.tbar{display:flex;gap:8px;align-items:center;margin-top:10px}
+.tbar .seg{flex:1}
+.tbar .seg button{padding:8px}
+.regchip{flex:none}
+.regchip[aria-pressed="true"]{background:var(--g-buero);border-color:var(--g-buero);color:#fff}
+
+/* Team: Monat wie die Excel – ganzer Monat ohne Scrollen */
+.mo{margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px;
+  --rh:max(15px,calc((100dvh - 262px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)) / 32))}
+.mo-row{display:grid;grid-template-columns:38px repeat(var(--n),minmax(0,1fr)) 26px;gap:2px;align-items:center;height:var(--rh);border-radius:4px}
+.mo-row + .mo-row{margin-top:1px}
+.mo-row.we{background:var(--surface2)}
+.mo-row.hol{background:color-mix(in srgb,var(--g-urlaub) 14%,transparent)}
+.mo-row.td{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.mo-hd{height:auto;padding-bottom:2px}
+.mo-d{background:none;border:0;padding:0 2px;display:flex;gap:3px;align-items:baseline;height:100%;font-size:10px;color:var(--muted);line-height:1;position:relative}
+.mo-d b{font-size:11.5px;color:var(--ink);font-variant-numeric:tabular-nums;min-width:15px;text-align:right}
+.mo-d i{position:absolute;left:0;top:50%;width:5px;height:5px;margin-top:-2.5px;border-radius:50%;background:var(--accent)}
+.mo-c{height:calc(var(--rh) - 2px);border-radius:4px;display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:clamp(8px,calc(var(--rh) * .55),10.5px);line-height:1;color:#fff;background:var(--c);overflow:hidden;min-width:0}
+.mo-c.empty{background:color-mix(in srgb,var(--line) 35%,transparent)}
+.mo-row.we .mo-c.empty,.mo-row.hol .mo-c.empty{background:transparent}
+.mo-c[data-editcell]{cursor:pointer}
+.mo-n{font-size:11px;font-weight:700;text-align:right;padding-right:3px;font-variant-numeric:tabular-nums}
+
+.hero-sm{padding-block:10px 12px;border-radius:0 0 18px 18px}
+.hero-sm h1{font-size:21px}
+.hero-sm .iconbtn{background:transparent;border-color:color-mix(in srgb,var(--hero-ink) 30%,transparent);color:var(--hero-ink);width:34px;height:34px}
