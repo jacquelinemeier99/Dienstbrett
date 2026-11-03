@@ -64,7 +64,7 @@ export async function ensureMonths(months) {
       const from = `${m}-01`, to = `${m}-${pad(new Date(y, mo, 0).getDate())}`;
       const [sh, ev, bo, ap] = await Promise.all([
         all(() => sb.from('shifts').select('user_id,day,code').gte('day', from).lte('day', to)),
-        all(() => sb.from('events').select('*').gte('day', from).lte('day', to)),
+        all(() => sb.from('events').select('*').lte('day', to).or(`day_end.gte.${from},day.gte.${from}`)),   // auch mehrtägige
         all(() => sb.from('bookings').select('*').gte('day', from).lte('day', to)),
         all(() => sb.from('appts').select('*').gte('day', from).lte('day', to)),
       ]);
@@ -134,8 +134,12 @@ export async function paintShifts(uid, changes) {   // changes: Map(day -> code 
     prev.forEach((c, d) => c ? store.shifts.set(sk(uid, d), c) : store.shifts.delete(sk(uid, d))); onChange(); throw e;
   }
 }
-export async function addEvent(day, at, title) {
-  const { data, error } = await sb.from('events').insert({ day, at: at || null, title, created_by: store.me.id }).select().single();
+export async function addEvent(ev) {
+  const { data, error } = await sb.from('events').insert({ ...ev, created_by: store.me.id }).select().single();
+  fail(error); store.events.set(data.id, data); onChange();
+}
+export async function updateEvent(id, patch) {
+  const { data, error } = await sb.from('events').update(patch).eq('id', id).select().single();
   fail(error); store.events.set(data.id, data); onChange();
 }
 export async function deleteEvent(id) {

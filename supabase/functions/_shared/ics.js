@@ -26,7 +26,7 @@ const fold = (line) => {
   out.push(rest); return out.join('\r\n');
 };
 
-/** items: { uid, day:'YYYY-MM-DD', title, from?:'HH:MM', to?:'HH:MM', toNextDay?:bool, busy?:bool } */
+/** items: { uid, day:'YYYY-MM-DD', dayEnd?:'YYYY-MM-DD', title, from?:'HH:MM', to?:'HH:MM', toNextDay?:bool, busy?:bool } */
 export function buildCalendar(name, items, stamp = new Date()) {
   const dtstamp = stamp.toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
   const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Dienstbrett//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
@@ -37,7 +37,7 @@ export function buildCalendar(name, items, stamp = new Date()) {
       L.push(`DTSTART;TZID=Europe/Berlin:${d8(it.day)}T${t6(it.from)}`,
              `DTEND;TZID=Europe/Berlin:${d8(it.toNextDay ? nextDay(it.day) : it.day)}T${t6(it.to)}`);
     } else {
-      L.push(`DTSTART;VALUE=DATE:${d8(it.day)}`, `DTEND;VALUE=DATE:${d8(nextDay(it.day))}`);
+      L.push(`DTSTART;VALUE=DATE:${d8(it.day)}`, `DTEND;VALUE=DATE:${d8(nextDay(it.dayEnd || it.day))}`);
     }
     L.push(`TRANSP:${it.busy ? 'OPAQUE' : 'TRANSPARENT'}`, `SUMMARY:${esc(it.title)}`, 'END:VEVENT');
   }
@@ -54,8 +54,9 @@ export function shiftItem(userKey, day, code) {
   return is24(code) ? { ...base, from: '08:00', to: '08:00', toNextDay: true, busy: true } : base;
 }
 export function eventItem(e) {
-  return { uid: `team-${e.id}@dienstbrett`, day: e.day, title: e.title,
-    ...(e.at ? { from: e.at, to: addHour(e.at), busy: true } : {}) };
+  const title = e.short && e.short !== e.title ? `${e.short} – ${e.title}` : e.title;
+  if (e.day_end && e.day_end > e.day) return { uid: `team-${e.id}@dienstbrett`, day: e.day, dayEnd: e.day_end, title };
+  return { uid: `team-${e.id}@dienstbrett`, day: e.day, title, ...(e.at ? { from: e.at, to: addHour(e.at), busy: true } : {}) };
 }
 export function apptItem(a) {
   return { uid: `termin-${a.id}@dienstbrett`, day: a.day, title: a.title || 'Privat', from: a.t_from, to: a.t_to, busy: true };

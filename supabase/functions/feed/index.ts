@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     for (const s of data) items.push(shiftItem(userKey, s.day, s.code));
   }
   if (fs.include_team) {
-    const data = await q(`events?select=id,day,at,title&day=gte.${from}&day=lte.${to}&limit=2000`);
+    const data = await q(`events?select=id,day,day_end,at,title,short&day=lte.${to}&or=(day_end.gte.${from},day.gte.${from})&limit=2000`);
     for (const e of data) items.push(eventItem(e));
   }
   if (fs.include_appts) {

@@ -270,3 +270,19 @@ a.btn{text-decoration:none;text-align:center}
 .hero-sm{padding-block:10px 12px;border-radius:0 0 18px 18px}
 .hero-sm h1{font-size:21px}
 .hero-sm .iconbtn{background:transparent;border-color:color-mix(in srgb,var(--hero-ink) 30%,transparent);color:var(--hero-ink);width:34px;height:34px}
+
+/* Teamtermine als Kürzel am Datum */
+.evtag{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:4px;padding:1px 4px;background:var(--accent);color:var(--accent-ink);font-family:var(--f-display);font-weight:800;font-size:9px;line-height:1.2;letter-spacing:.02em;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer}
+.evtag.big{font-size:12px;padding:3px 7px;border-radius:6px;vertical-align:middle}
+.evtag.more{background:var(--surface2);color:var(--ink)}
+.dlwrap{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+.dlwrap .evtag{margin-left:4px}
+.mo-row{grid-template-columns:76px repeat(var(--n),minmax(0,1fr)) 24px}
+.mo-d span{font-size:9.5px}
+.mo-dw{display:flex;align-items:center;gap:2px;min-width:0;height:100%}
+.mo-dw .mo-d{flex:none}
+.mo-dw .evtag{font-size:8px;padding:0 3px;height:calc(var(--rh) - 4px);min-width:0}
+button.ev{width:100%;background:none;border:0;border-top:1px solid var(--line);text-align:left;padding:10px 0;display:flex;gap:10px;align-items:center}
+button.ev:first-of-type{border-top:0}
+.ev .t small{display:block;color:var(--muted);font-weight:500;font-size:12.5px}
+.field textarea{font:inherit;color:var(--ink);background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:11px 12px;width:100%;resize:vertical}

@@ -40,7 +40,7 @@ const closeSheet = async p => { if (await p.$('#scrim')) await p.keyboard.press(
   check('Begrüßung', (await j.textContent('.hello')).includes('Jacqueline'));
   await j.click('[data-set="C3"]'); await j.waitForTimeout(600);
   check('Dienst C3 gesetzt', (await j.textContent('.mynow strong')).includes('C3'));
-  await j.click('[data-act=add-ev]'); await j.fill('#e-title', 'Abteilungsbesprechung'); await j.fill('#e-time', '10:00');
+  await j.click('[data-act=add-ev]'); await j.fill('#e-short', 'AbtB'); await j.fill('#e-title', 'Abteilungsbesprechung'); await j.fill('#e-time', '10:00');
   await j.click('#evform button[type=submit]'); await j.waitForTimeout(600);
   check('Teamtermin angelegt', (await j.textContent('#app')).includes('Abteilungsbesprechung'));
   await j.screenshot({ path: `${OUT}/e2e-heute.png`, fullPage: true });

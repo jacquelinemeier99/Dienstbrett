@@ -53,7 +53,9 @@ const isAdmin = () => store.me.role === 'admin';
 const nameOf = id => first(store.profiles.find(p => p.id === id)?.name || 'Ehemalig');
 
 /* ---------- Abfragen ---------- */
-const eventsOn = k => [...store.events.values()].filter(e => e.day === k).sort((a, b) => (a.at || '').localeCompare(b.at || ''));
+const eventsOn = k => [...store.events.values()].filter(e => e.day <= k && k <= (e.day_end || e.day)).sort((a, b) => (a.at || '').localeCompare(b.at || '') || a.short.localeCompare(b.short));
+const evRange = e => e.day_end && e.day_end > e.day ? `${parse(e.day).getDate()}.${parse(e.day).getMonth() + 1}. – ${parse(e.day_end).getDate()}.${parse(e.day_end).getMonth() + 1}.` : '';
+const evTag = e => `<button class="evtag" data-ev="${e.id}" title="${esc(e.title)}">${esc(e.short)}</button>`;
 const bookingsOn = (k, car) => [...store.bookings.values()].filter(b => b.day === k && (car === undefined || b.car === car)).sort((a, b) => a.t_from.localeCompare(b.t_from));
 const apptsOn = k => [...store.appts.values()].filter(a => a.day === k).sort((a, b) => a.t_from.localeCompare(b.t_from));
 
@@ -156,7 +158,7 @@ function heute() {
     <section>
       <p class="eyebrow">Teamtermine · für alle sichtbar</p>
       <div class="card">
-        ${eventsOn(selDay).length ? eventsOn(selDay).map(e => `<div class="ev"><time>${hm(e.at) || 'ganzt.'}</time><span class="t">${esc(e.title)}</span><button class="btn small ghost" data-act="ics-ev" data-id="${e.id}">Outlook</button>${!isGuest() && (e.created_by === store.me.id || isAdmin()) ? `<button class="linkbtn" data-act="del-ev" data-id="${e.id}">Löschen</button>` : ''}</div>`).join('') : '<p class="note" style="margin:0 0 10px">An diesem Tag gibt es keine Teamtermine.</p>'}
+        ${eventsOn(selDay).length ? eventsOn(selDay).map(e => `<button class="ev" data-ev="${e.id}"><span class="evtag big">${esc(e.short)}</span><span class="t">${esc(e.title)}<small>${[hm(e.at), evRange(e)].filter(Boolean).join(' · ') || 'ganztägig'}${e.info ? ' · mehr …' : ''}</small></span></button>`).join('') : '<p class="note" style="margin:0 0 10px">An diesem Tag gibt es keine Teamtermine.</p>'}
         ${isGuest() ? '' : '<div class="stack" style="margin-top:8px"><button class="btn ghost block" data-act="add-ev">Teamtermin eintragen</button></div>'}
       </div>
     </section>
@@ -194,14 +196,14 @@ function weeks(y, m) {
       ${days.map((d, i) => {
         const k = key(d), hol = holidayName(k), n = counts[i], off = isWE(d) || hol;
         return `<div class="wrow ${isWE(d) ? 'we' : ''} ${hol ? 'hol' : ''} ${d.getTime() === TODAY.getTime() ? 'td' : ''}" style="--n:${ps.length}">
-          <button class="dl" data-jump="${k}" aria-label="${nice(d)} öffnen" ${hol ? `title="${esc(hol)}"` : ''}><span>${DOW[d.getDay()]}</span><b>${d.getDate()}</b>${hol ? '<em>Feiertag</em>' : ''}</button>
+          <span class="dlwrap"><button class="dl" data-jump="${k}" aria-label="${nice(d)} öffnen" ${hol ? `title="${esc(hol)}"` : ''}><span>${DOW[d.getDay()]}</span><b>${d.getDate()}</b>${hol ? '<em>Feiertag</em>' : ''}</button>${eventsOn(k).map(evTag).join('')}</span>
           ${ps.map(p => {
             const c = shiftOf(p.id, k), vis = c && (showRegular || !REGULAR.includes(c)), me = isMe(p);
             return vis ? `<span class="wc ${me ? 'me' : ''}" style="--c:${col(c)}" title="${esc(p.name)}: ${esc(info(c).label)}" ${me ? `data-editcell="${k}"` : ''}>${esc(c)}</span>`
                        : `<span class="wc empty ${me ? 'me' : ''}" ${me ? `data-editcell="${k}"` : ''}></span>`;
           }).join('')}
           <span class="cnt"><b style="color:${off ? 'var(--muted)' : n < MIN_STAFF ? 'var(--danger)' : 'var(--ink)'}">${n}</b><span class="track"><i style="width:${Math.min(100, n / Math.max(1, staff().length) * 100)}%;background:${off ? 'var(--g-frei)' : n < MIN_STAFF ? 'var(--danger)' : 'var(--g-buero)'}"></i></span></span>
-        </div>${eventsOn(k).map(e => `<div class="evline"><span>${hm(e.at) || 'ganzt.'}</span><b>${esc(e.title)}</b></div>`).join('')}`;
+        </div>`;
       }).join('')}
     </article>`);
     mon = addDays(mon, 7);
@@ -217,7 +219,7 @@ function monthTable(y, m) {
     ${ds.map(d => {
       const k = key(d), hol = holidayName(k), off = isWE(d) || hol, n = inOfficeN(dayStats(k)), ev = eventsOn(k);
       return `<div class="mo-row ${off ? 'we' : ''} ${hol ? 'hol' : ''} ${d.getTime() === TODAY.getTime() ? 'td' : ''}">
-        <button class="mo-d" data-jump="${k}" aria-label="${nice(d)} öffnen" title="${esc([hol, ...ev.map(e => e.title)].filter(Boolean).join(' · '))}"><b>${d.getDate()}</b><span>${DOW[d.getDay()]}</span>${ev.length ? '<i></i>' : ''}</button>
+        <span class="mo-dw"><button class="mo-d" data-jump="${k}" aria-label="${nice(d)} öffnen" title="${esc(hol)}"><b>${d.getDate()}</b><span>${DOW[d.getDay()]}</span></button>${ev.slice(0, 2).map(evTag).join('')}${ev.length > 2 ? `<button class="evtag more" data-ev="${ev[2].id}">+${ev.length - 2}</button>` : ''}</span>
         ${ps.map(p => {
           const c = shiftOf(p.id, k), vis = c && (showRegular || !REGULAR.includes(c)), me = isMe(p);
           return `<span class="mo-c ${vis ? '' : 'empty'}" ${vis ? `style="--c:${col(c)}"` : ''} ${me ? `data-editcell="${k}"` : ''} title="${esc(p.name)}${c ? ': ' + esc(info(c).label) : ''}">${vis ? esc(c) : ''}</span>`;
@@ -241,7 +243,7 @@ function team() {
       <button class="chip regchip" data-act="toggle-reg" aria-pressed="${showRegular}" title="T und T½ sind normal und deshalb ausgeblendet">T zeigen</button></div>
     ${teamMode === 'woche'
       ? weeks(y, m) + '<p class="note">Leeres Feld an einem Werktag = Regeldienst. Tippe auf ein Datum für die Tagesansicht oder auf deine eigene Spalte, um deinen Dienst zu ändern.</p>'
-      : monthTable(y, m) + '<p class="note">Büro = Anzahl im Büro (ohne C1, C2, BV). Leeres Feld an einem Werktag = Regeldienst. Gelber Punkt = Teamtermin. Tippe auf ein Datum für die Tagesansicht oder auf deine eigene Spalte, um deinen Dienst zu ändern.</p>'}
+      : monthTable(y, m) + '<p class="note">Büro = Anzahl im Büro (ohne C1, C2, BV). Leeres Feld an einem Werktag = Regeldienst. Gelbe Kürzel = Teamtermine, antippen für Details. Tippe auf ein Datum für die Tagesansicht oder auf deine eigene Spalte, um deinen Dienst zu ändern.</p>'}
     </section>
     <section><p class="eyebrow">Dienstarten · # gilt als Frei, LD als LDF</p>
       <div class="codelegend">${Object.entries(CODES).map(([c, v]) => `<span><b style="--c:${col(c)}">${esc(c)}</b>${esc(v.label.replace('24-h-Dienst ', '24 h ').replace(' (Veranstaltung)', ''))}</span>`).join('')}</div></section>
@@ -372,20 +374,42 @@ function bookSheet() {
 }
 
 /* ---------- Teamtermin ---------- */
-function evSheet() {
+function evDetail(id) {
+  const e = store.events.get(id); if (!e) return;
+  const when = evRange(e) || nice(parse(e.day));
   openSheet(`
-    <h2>Teamtermin eintragen</h2><p class="sub">Für alle sichtbar, z. B. Abteilungsbesprechung oder Veranstaltung</p>
+    <p class="sub" style="margin:0">Teamtermin · für alle sichtbar</p>
+    <h2><span class="evtag big">${esc(e.short)}</span> ${esc(e.title)}</h2>
+    <p class="sub">${esc(when)}${e.at ? ` · ${hm(e.at)} Uhr` : ''}</p>
+    ${e.info ? `<div class="prose"><p>${esc(e.info).replace(/\n/g, '<br>')}</p></div>` : ''}
+    <div class="stack">
+      <button class="btn ghost block" data-act="ics-ev" data-id="${e.id}">In Outlook übernehmen</button>
+      ${isGuest() ? '' : `<button class="btn ghost block" data-act="edit-ev" data-id="${e.id}">Bearbeiten</button>
+      <button class="linkbtn" data-act="del-ev" data-id="${e.id}" style="justify-self:center">Löschen</button>`}
+    </div>`);
+}
+function evSheet(id) {
+  const e = id ? store.events.get(id) : null;
+  openSheet(`
+    <h2>${e ? 'Teamtermin bearbeiten' : 'Teamtermin eintragen'}</h2><p class="sub">Steht für alle beim Datum, z. B. WM, VfL oder Abteilungsbesprechung</p>
     <form id="evform">
-      <div class="field"><label for="e-title">Was</label><input id="e-title" required maxlength="120" placeholder="z. B. Abteilungsbesprechung"></div>
-      <div class="row2"><div class="field"><label for="e-date">Datum</label><input id="e-date" type="date" value="${selDay}" required></div>
-      <div class="field"><label for="e-time">Uhrzeit (freiwillig)</label><input id="e-time" type="time"></div></div>
-      <div class="stack"><button class="btn block" type="submit">Für alle eintragen</button></div>
+      <div class="row2"><div class="field"><label for="e-short">Kürzel</label><input id="e-short" required maxlength="8" placeholder="z. B. WM" value="${esc(e?.short || '')}"></div>
+      <div class="field"><label for="e-time">Uhrzeit (freiwillig)</label><input id="e-time" type="time" value="${hm(e?.at)}"></div></div>
+      <div class="field"><label for="e-title">Was genau</label><input id="e-title" required maxlength="120" placeholder="z. B. Weihnachtsmarkt" value="${esc(e?.title || '')}"></div>
+      <div class="row2"><div class="field"><label for="e-date">Von</label><input id="e-date" type="date" value="${e?.day || selDay}" required></div>
+      <div class="field"><label for="e-end">Bis (freiwillig)</label><input id="e-end" type="date" value="${e?.day_end || ''}"></div></div>
+      <div class="field"><label for="e-info">Mehr Informationen (freiwillig)</label><textarea id="e-info" maxlength="1000" rows="3" placeholder="z. B. Treffpunkt, Ansprechperson, was mitzubringen ist">${esc(e?.info || '')}</textarea></div>
+      <div id="e-err" class="err" hidden></div>
+      <div class="stack"><button class="btn block" type="submit">${e ? 'Speichern' : 'Für alle eintragen'}</button></div>
     </form>`, root => {
-    root.querySelector('#evform').onsubmit = safely(async e => {
-      e.preventDefault();
-      const t = root.querySelector('#e-title').value.trim(); if (!t) return;
-      await api.addEvent(root.querySelector('#e-date').value, root.querySelector('#e-time').value, t);
-      closeSheet(); toast('Teamtermin eingetragen. Alle sehen ihn jetzt.');
+    root.querySelector('#evform').onsubmit = safely(async ev => {
+      ev.preventDefault();
+      const v = sel => root.querySelector(sel).value.trim(), err = root.querySelector('#e-err');
+      const row = { short: v('#e-short'), title: v('#e-title'), day: v('#e-date'), day_end: v('#e-end') || null, at: v('#e-time') || null, info: v('#e-info') || null };
+      if (row.day_end && row.day_end < row.day) { err.textContent = 'Das Ende muss nach dem Anfang liegen.'; err.hidden = false; return; }
+      if (row.day_end === row.day) row.day_end = null;
+      if (e) await api.updateEvent(e.id, row); else await api.addEvent(row);
+      closeSheet(); toast(e ? 'Teamtermin gespeichert' : 'Teamtermin eingetragen. Alle sehen ihn jetzt.');
     });
   });
 }
@@ -605,6 +629,7 @@ document.addEventListener('click', async e => {
   if (ds.edit) return paintOn ? undefined : editSheet(ds.edit);
   if (ds.pmode) { paintOn = ds.pmode === 'on'; return render(); }
   if (ds.paint !== undefined) { paintCode = ds.paint; return render(); }
+  if (ds.ev) return evDetail(ds.ev);
   if (ds.jump) { selDay = ds.jump; return go('heute'); }
   if (ds.set !== undefined) return safely(async () => {
     const cur = shiftOf(store.me.id, selDay);
@@ -626,10 +651,14 @@ document.addEventListener('click', async e => {
     case 'toggle-reg': showRegular = !showRegular; return render();
     case 'book': return bookSheet();
     case 'add-ev': return evSheet();
+    case 'edit-ev': return evSheet(ds.id);
     case 'close-sheet': return closeSheet();
     case 'privacy': return privacySheet();
     case 'del-book': return safely(async () => { await api.deleteBooking(ds.id); toast('Reservierung storniert'); })();
-    case 'del-ev': return safely(async () => { await api.deleteEvent(ds.id); toast('Teamtermin gelöscht'); })();
+    case 'del-ev': {
+      if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Wirklich für alle löschen?'; return; }
+      return safely(async () => { await api.deleteEvent(ds.id); closeSheet(); toast('Teamtermin gelöscht'); })();
+    }
     case 'del-appt': return safely(async () => { const a = store.appts.get(ds.id); await api.deleteAppt(ds.id); closeSheet(); if (a) editSheet(a.day); })();
     case 'ics-ev': { const ev = one(ds.id); return download(`teamtermin-${ev.day}.ics`, buildCalendar('Teamtermin', [eventItem(ev)])); }
     case 'ics-appt': { const a = one(ds.id); return download(`termin-${a.day}.ics`, buildCalendar('Termin', [apptItem(a)])); }

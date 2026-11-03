@@ -1,4 +1,4 @@
-// Kalender-Abo – fertige Einzeldatei zum Einfügen im Supabase-Dashboard (Edge Functions → Deploy a new function → Via Editor, Name: feed).
+// Kalender-Abo – fertige Einzeldatei zum Einfügen im Supabase-Dashboard (Edge Functions → Deploy a new function → Via Editor, Datei index.ts, Name der Funktion: feed).
 // Erzeugt aus supabase/functions/feed/index.ts. Nicht von Hand ändern.
 // supabase/functions/_shared/codes.js
 var CODES = {
@@ -83,7 +83,7 @@ function buildCalendar(name, items, stamp = /* @__PURE__ */ new Date()) {
         `DTEND;TZID=Europe/Berlin:${d8(it.toNextDay ? nextDay(it.day) : it.day)}T${t6(it.to)}`
       );
     } else {
-      L.push(`DTSTART;VALUE=DATE:${d8(it.day)}`, `DTEND;VALUE=DATE:${d8(nextDay(it.day))}`);
+      L.push(`DTSTART;VALUE=DATE:${d8(it.day)}`, `DTEND;VALUE=DATE:${d8(nextDay(it.dayEnd || it.day))}`);
     }
     L.push(`TRANSP:${it.busy ? "OPAQUE" : "TRANSPARENT"}`, `SUMMARY:${esc(it.title)}`, "END:VEVENT");
   }
@@ -97,12 +97,9 @@ function shiftItem(userKey, day, code) {
   return is24(code) ? { ...base, from: "08:00", to: "08:00", toNextDay: true, busy: true } : base;
 }
 function eventItem(e) {
-  return {
-    uid: `team-${e.id}@dienstbrett`,
-    day: e.day,
-    title: e.title,
-    ...e.at ? { from: e.at, to: addHour(e.at), busy: true } : {}
-  };
+  const title = e.short && e.short !== e.title ? `${e.short} \u2013 ${e.title}` : e.title;
+  if (e.day_end && e.day_end > e.day) return { uid: `team-${e.id}@dienstbrett`, day: e.day, dayEnd: e.day_end, title };
+  return { uid: `team-${e.id}@dienstbrett`, day: e.day, title, ...e.at ? { from: e.at, to: addHour(e.at), busy: true } : {} };
 }
 function apptItem(a) {
   return { uid: `termin-${a.id}@dienstbrett`, day: a.day, title: a.title || "Privat", from: a.t_from, to: a.t_to, busy: true };
@@ -140,7 +137,7 @@ Deno.serve(async (req) => {
     for (const s of data) items.push(shiftItem(userKey, s.day, s.code));
   }
   if (fs.include_team) {
-    const data = await q(`events?select=id,day,at,title&day=gte.${from}&day=lte.${to}&limit=2000`);
+    const data = await q(`events?select=id,day,day_end,at,title,short&day=lte.${to}&or=(day_end.gte.${from},day.gte.${from})&limit=2000`);
     for (const e of data) items.push(eventItem(e));
   }
   if (fs.include_appts) {
